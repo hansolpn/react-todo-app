@@ -3,14 +3,32 @@ import TodoHeader from './TodoHeader';
 import TodoMain from './TodoMain';
 import TodoInput from './TodoInput';
 import './scss/TodoTemplate.scss';
-import { API_BASE_URL as BASE, TODO } from '../../config/host-config';
+import { API_BASE_URL as BASE, TODO, USER } from '../../config/host-config';
+import { useNavigate } from 'react-router-dom';
+import { getLoginUserInfo } from '../../utils/AuthContext';
+import { Spinner } from 'reactstrap';
 
 const TodoTemplate = () => {
   // todos 배열을 상태 관리
   const [todos, setTodos] = useState([]);
+  // 로딩 상태값 관리 (처음에는 무조건 로딩이 필요하기 때문에 true -> 로딩이 끝나면 false로 전환)
+  const [loading, setLoading] = useState(true);
+
+  const redirection = useNavigate();
+
+  // 로그인 인증 토큰 얻어오기
+  const { token } = getLoginUserInfo();
+
+  // fetch 요청 보낼 때 사용할 요청 헤더 설정
+  const requestHeader = {
+    'content-type': 'application/json',
+    // JWT에 대한 인증 토큰이라는 타입의 선언
+    Authorization: 'Bearer ' + token,
+  };
 
   // 서버에 할 일 목록(json)을 요청(fetch)해서 받아와야 함
   const API_BASE_URL = BASE + TODO;
+  const API_USER_URL = BASE + USER;
 
   /*
     todoInput에게 todoText를 받아오는 함수
@@ -33,12 +51,18 @@ const TodoTemplate = () => {
 
     const res = await fetch(API_BASE_URL, {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: requestHeader,
       body: JSON.stringify(newTodo),
     });
 
-    const json = await res.json();
-    setTodos(json.todos);
+    if (res.status === 200) {
+      const json = await res.json();
+      setTodos(json.todos);
+    } else if (res.status === 401) {
+      alert('일반 회원은 일정 등록이 5개로 제한됩니다 ㅠㅠ');
+    } else {
+      alert(await res.text());
+    }
 
     /* fetch(API_BASE_URL, {
       method: 'POST',
@@ -58,6 +82,7 @@ const TodoTemplate = () => {
 
     fetch(`${API_BASE_URL}/${id}`, {
       method: 'DELETE',
+      headers: requestHeader,
     })
       .then((res) => res.json())
       .then((json) => {
@@ -89,7 +114,7 @@ const TodoTemplate = () => {
 
     fetch(API_BASE_URL, {
       method: 'PUT',
-      headers: { 'content-type': 'application/json' },
+      headers: requestHeader,
       body: JSON.stringify(modifyTodo),
     })
       .then((res) => res.json())
@@ -101,21 +126,65 @@ const TodoTemplate = () => {
   // 체크가 안 된 할 일의 개수 카운트 하기
   const countRestTodo = () => todos.filter((todo) => !todo.done).length;
 
+  // 등급 승격
+  const fetchPromote = async () => {
+    const res = await fetch(API_USER_URL + '/promote', {
+      method: 'PUT',
+      headers: requestHeader,
+    });
+
+    if (res.status === 200) {
+      const json = await res.json();
+
+      localStorage.setItem('ACCESS_TOKEN', json.token);
+      localStorage.setItem('USER_ROLE', json.role);
+      redirection('/');
+    } else if (res.status === 403) {
+      alert('이미 프리미엄 회원입니다.');
+    }
+  };
+  // 등급 승격 서버 요청 (프리미엄)
+  const promote = () => {
+    console.log('등급 승격 서버 요청!');
+    fetchPromote();
+  };
+
   useEffect(() => {
     // 페이지가 처음 렌더링 됨과 동시에 할 일 목록을 서버에 요청해서 뿌려 주겠습니다.
-    fetch(API_BASE_URL)
-      .then((res) => res.json())
-      .then((json) => {
-        console.log(json);
+    fetch(API_BASE_URL, {
+      method: 'GET',
+      headers: requestHeader,
+    })
+      .then((res) => {
+        if (res.status === 200) return res.json();
+        else if (res.status === 403) {
+          alert('로그인이 필요한 서비스 입니다.');
+          redirection('/login');
+        } else {
+          alert('관리자에게 문의하세요!');
+        }
 
-        // fetch를 통해 받아온 데이터를 상태 변수에 할당
-        setTodos(json.todos);
+        return null;
+      })
+      .then((json) => {
+        if (json) {
+          console.log(json);
+
+          // fetch를 통해 받아온 데이터를 상태 변수에 할당
+          setTodos(json.todos);
+          // 로딩 완료 처리
+          setLoading(false);
+        }
       });
   }, []);
 
-  return (
+  // 로딩이 끝난 후 보여줄 컴포넌트
+  const loadEndedPage = (
     <div className='TodoTemplate'>
-      <TodoHeader count={countRestTodo} />
+      <TodoHeader
+        count={countRestTodo}
+        promote={promote}
+      />
       <TodoMain
         todoList={todos}
         remove={removeTodo}
@@ -124,6 +193,15 @@ const TodoTemplate = () => {
       <TodoInput addTodo={addTodo} />
     </div>
   );
+
+  // 로딩 중일 때 보여줄 컴포넌트
+  const loadingPage = (
+    <div className='loading'>
+      <Spinner color='danger'>loading...</Spinner>
+    </div>
+  );
+
+  return <>{loading ? loadingPage : loadEndedPage}</>;
 };
 
 export default TodoTemplate;
