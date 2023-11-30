@@ -60,6 +60,9 @@ const TodoTemplate = () => {
       setTodos(json.todos);
     } else if (res.status === 401) {
       alert('일반 회원은 일정 등록이 5개로 제한됩니다 ㅠㅠ');
+    } else if (res.status === 400) {
+      const json = await res.json();
+      alert(json.defaultMessage);
     } else {
       alert(await res.text());
     }
