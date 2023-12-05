@@ -7,6 +7,7 @@ import { API_BASE_URL, USER } from '../../config/host-config';
 
 const Header = () => {
   const profileRequestURL = `${API_BASE_URL}${USER}/load-profile`;
+  const logoutRequestURL = `${API_BASE_URL}${USER}/logout`;
 
   const redirection = useNavigate();
 
@@ -17,7 +18,14 @@ const Header = () => {
   const { isLoggedIn, userName, onLogout } = useContext(AuthContext);
 
   // 로그아웃 핸들러
-  const logoutHandler = (e) => {
+  const logoutHandler = async (e) => {
+    const res = fetch(logoutRequestURL, {
+      method: 'GET',
+      headers: {
+        Authorization: 'Bearer ' + localStorage.getItem('ACCESS_TOKEN'),
+      },
+    });
+
     // AuthContext의 OnLogout 함수를 호출하여 로그인 상태를 업데이트 합니다.
     onLogout();
     redirection('/login');
@@ -35,10 +43,19 @@ const Header = () => {
     if (res.status === 200) {
       // 서버에서는 byte[]로 직렬화된 이미지가 응답되므로
       // blob()을 통해 전달 받아야 한다 (json() xxx)
-      const profileBlob = await res.blob();
-      // 해당 이미지를 imgUrl로 변경
-      const imgUrl = window.URL.createObjectURL(profileBlob);
-      setProfileURL(imgUrl);
+      console.log('Content-Type:', res.headers.get('Content-Type'));
+      console.log('kakaoProfile:', res.headers.get('kakaoProfile'));
+      if (res.headers.get('kakaoProfile')) {
+        // 카카오 프로필 사진
+        const profileHttp = await res.text();
+        console.log();
+        setProfileURL(profileHttp);
+      } else {
+        const profileBlob = await res.blob();
+        // 해당 이미지를 imgUrl로 변경
+        const imgUrl = window.URL.createObjectURL(profileBlob);
+        setProfileURL(imgUrl);
+      }
     } else {
       const err = await res.text();
       console.log(err);
