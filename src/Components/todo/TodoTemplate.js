@@ -1,12 +1,13 @@
-import React, { useEffect, useState } from 'react';
+import React, { useContext, useEffect, useState } from 'react';
 import TodoHeader from './TodoHeader';
 import TodoMain from './TodoMain';
 import TodoInput from './TodoInput';
 import './scss/TodoTemplate.scss';
 import { API_BASE_URL as BASE, TODO, USER } from '../../config/host-config';
 import { useNavigate } from 'react-router-dom';
-import { getLoginUserInfo } from '../../utils/AuthContext';
+import AuthContext, { getLoginUserInfo } from '../../utils/AuthContext';
 import { Spinner } from 'reactstrap';
+import HttpService from '../../utils/httpService';
 
 const TodoTemplate = () => {
   // todos 배열을 상태 관리
@@ -15,6 +16,7 @@ const TodoTemplate = () => {
   const [loading, setLoading] = useState(true);
 
   const redirection = useNavigate();
+  const { onLogout } = useContext(AuthContext);
 
   // 로그인 인증 토큰 얻어오기
   const { token } = getLoginUserInfo();
@@ -154,31 +156,35 @@ const TodoTemplate = () => {
 
   useEffect(() => {
     // 페이지가 처음 렌더링 됨과 동시에 할 일 목록을 서버에 요청해서 뿌려 주겠습니다.
-    fetch(API_BASE_URL, {
-      method: 'GET',
-      headers: requestHeader,
-    })
-      .then((res) => {
-        if (res.status === 200) return res.json();
-        else if (res.status === 403) {
-          alert('로그인이 필요한 서비스 입니다.');
-          redirection('/login');
-        } else {
-          alert('관리자에게 문의하세요!');
-        }
+    const fetch = HttpService(
+      API_BASE_URL,
+      {
+        method: 'GET',
+        headers: requestHeader,
+      },
+      redirection,
+      onLogout
+    );
 
-        return null;
-      })
-      .then((json) => {
-        if (json) {
+    fetch.then(async (res) => {
+      if (res) {
+        if (res.status === 200) {
+          const json = await res.json();
+
           console.log(json);
 
           // fetch를 통해 받아온 데이터를 상태 변수에 할당
           setTodos(json.todos);
           // 로딩 완료 처리
           setLoading(false);
+        } else if (res.status === 403) {
+          alert('로그인이 필요한 서비스 입니다.');
+          redirection('/login');
+        } else {
+          alert('관리자에게 문의하세요!');
         }
-      });
+      }
+    });
   }, []);
 
   // 로딩이 끝난 후 보여줄 컴포넌트

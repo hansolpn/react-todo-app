@@ -4,6 +4,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import './Header.scss';
 import AuthContext from '../../utils/AuthContext';
 import { API_BASE_URL, USER } from '../../config/host-config';
+import HttpService from '../../utils/httpService';
 
 const Header = () => {
   const profileRequestURL = `${API_BASE_URL}${USER}/load-profile`;
@@ -33,33 +34,40 @@ const Header = () => {
 
   // 프로필 이미지 요청
   const fetchProfileImage = async () => {
-    const res = await fetch(profileRequestURL, {
-      method: 'GET',
-      headers: {
-        Authorization: 'Bearer ' + localStorage.getItem('ACCESS_TOKEN'),
+    const res = await HttpService(
+      profileRequestURL,
+      {
+        method: 'GET',
+        headers: {
+          Authorization: 'Bearer ' + localStorage.getItem('ACCESS_TOKEN'),
+        },
       },
-    });
+      redirection,
+      onLogout
+    );
 
-    if (res.status === 200) {
-      // 서버에서는 byte[]로 직렬화된 이미지가 응답되므로
-      // blob()을 통해 전달 받아야 한다 (json() xxx)
-      console.log('Content-Type:', res.headers.get('Content-Type'));
-      console.log('kakaoProfile:', res.headers.get('kakaoProfile'));
-      if (res.headers.get('kakaoProfile')) {
-        // 카카오 프로필 사진
-        const profileHttp = await res.text();
-        console.log();
-        setProfileURL(profileHttp);
+    if (res) {
+      if (res.status === 200) {
+        // 서버에서는 byte[]로 직렬화된 이미지가 응답되므로
+        // blob()을 통해 전달 받아야 한다 (json() xxx)
+        console.log('Content-Type:', res.headers.get('Content-Type'));
+        console.log('kakaoProfile:', res.headers.get('kakaoProfile'));
+        if (res.headers.get('kakaoProfile')) {
+          // 카카오 프로필 사진
+          const profileHttp = await res.text();
+          console.log();
+          setProfileURL(profileHttp);
+        } else {
+          const profileBlob = await res.blob();
+          // 해당 이미지를 imgUrl로 변경
+          const imgUrl = window.URL.createObjectURL(profileBlob);
+          setProfileURL(imgUrl);
+        }
       } else {
-        const profileBlob = await res.blob();
-        // 해당 이미지를 imgUrl로 변경
-        const imgUrl = window.URL.createObjectURL(profileBlob);
-        setProfileURL(imgUrl);
+        const err = await res.text();
+        console.log(err);
+        setProfileURL(null);
       }
-    } else {
-      const err = await res.text();
-      console.log(err);
-      setProfileURL(null);
     }
   };
 
